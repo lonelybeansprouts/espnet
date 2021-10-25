@@ -59,8 +59,6 @@ tools/nkf/
 tools/venv/
 tools/sentencepiece/
 tools/swig/
-tools/warp-ctc/
-tools/warp-transducer/
 tools/*.done
 tools/PESQ*
 tools/hts_engine_API*
@@ -77,3 +75,8 @@ tools/speech_tools*
 tools/phonemizer*
 tools/py3mmseg
 tools/._*
+tools/warp-transducer/build
+tools/warp-ctc/build
+tools/warp-transducer/pytorch_binding/dist
+
+

@@ -6,13 +6,14 @@ if [ $# != 0 ]; then
     exit 1;
 fi
 
+
 # TODO(kamo): Consider clang case
 # Note: Requires gcc>=4.9.2 to build extensions with pytorch>=1.0
-if python3 -c 'import torch as t;assert t.__version__[0] == "1"' &> /dev/null; then \
-    python3 -c "from distutils.version import LooseVersion as V;assert V('$(gcc -dumpversion)') >= V('4.9.2'), 'Requires gcc>=4.9.2'"; \
+if $PYTHON -c 'import torch as t;assert t.__version__[0] == "1"' &> /dev/null; then \
+    $PYTHON -c "from distutils.version import LooseVersion as V;assert V('$(gcc -dumpversion)') >= V('4.9.2'), 'Requires gcc>=4.9.2'"; \
 fi
 
-rm -rf warp-transducer
+sudo rm -rf warp-transducer
 git clone --single-branch --branch espnet_v1.1 https://github.com/b-flo/warp-transducer.git
 
 (
@@ -27,6 +28,6 @@ git clone --single-branch --branch espnet_v1.1 https://github.com/b-flo/warp-tra
 
     (
         set -euo pipefail
-        cd pytorch_binding && python3 -m pip install -e .
+        cd pytorch_binding && $PYTHON -m pip install -e .
     )
 )

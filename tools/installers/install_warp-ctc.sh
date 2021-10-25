@@ -8,7 +8,8 @@ if [ $# != 0 ]; then
     exit 1;
 fi
 
-torch_17_plus=$(python3 <<EOF
+
+torch_17_plus=$($PYTHON <<EOF
 from distutils.version import LooseVersion as V
 import torch
 
@@ -19,7 +20,7 @@ else:
 EOF
 )
 
-torch_11_plus=$(python3 <<EOF
+torch_11_plus=$($PYTHON <<EOF
 from distutils.version import LooseVersion as V
 import torch
 
@@ -30,7 +31,7 @@ else:
 EOF
 )
 
-torch_10_plus=$(python3 <<EOF
+torch_10_plus=$($PYTHON <<EOF
 from distutils.version import LooseVersion as V
 import torch
 
@@ -41,14 +42,14 @@ else:
 EOF
 )
 
-torch_version=$(python3 <<EOF
+torch_version=$($PYTHON <<EOF
 import torch
 version = torch.__version__.split(".")
 print(version[0] + version[1])
 EOF
 )
 
-cuda_version=$(python3 <<EOF
+cuda_version=$($PYTHON <<EOF
 import torch
 if torch.cuda.is_available():
     version=torch.version.cuda.split(".")
@@ -69,17 +70,17 @@ elif "${torch_11_plus}"; then
     warpctc_version=0.2.2
     release_page_url=https://github.com/espnet/warp-ctc/releases/tag/v${warpctc_version}
     if [ -z "${cuda_version}" ]; then
-        python3 -m pip install warpctc-pytorch==${warpctc_version}+torch"${torch_version}".cpu -f ${release_page_url}
+        $PYTHON -m pip install warpctc-pytorch==${warpctc_version}+torch"${torch_version}".cpu -f ${release_page_url}
     else
-        python3 -m pip install warpctc-pytorch==${warpctc_version}+torch"${torch_version}".cuda"${cuda_version}" -f ${release_page_url}
+        $PYTHON -m pip install warpctc-pytorch==${warpctc_version}+torch"${torch_version}".cuda"${cuda_version}" -f ${release_page_url}
     fi
 
 elif "${torch_10_plus}"; then
 
     if [ -z "${cuda_version}" ]; then
-        python3 -m pip install warpctc-pytorch10-cpu
+        $PYTHON -m pip install warpctc-pytorch10-cpu
     else
-        python3 -m pip install warpctc-pytorch10-cuda"${cuda_version}"
+        $PYTHON -m pip install warpctc-pytorch10-cuda"${cuda_version}"
     fi
 
 else
@@ -98,10 +99,10 @@ else
             cd build && cmake .. && ${MAKE}
         )
 
-        python3 -m pip install cffi
+        $PYTHON -m pip install cffi
         (
             set -euo pipefail
-            cd pytorch_binding && python3 -m pip install -e .
+            cd pytorch_binding && $PYTHON -m pip install -e .
         )
     )
 
