@@ -27,6 +27,9 @@ test_spm.model
 *.vim
 *.swp
 *.nfs*
+*.o
+*.so
+
 
 # recipe related
 egs*/*/*/data*
@@ -66,7 +69,6 @@ tools/open_jtalk*
 tools/pyopenjtalk*
 tools/tdmelodic_openjtalk*
 tools/s3prl
-tools/sctk*
 tools/sph2pipe*
 tools/espeak-ng*
 tools/MBROLA*
@@ -78,5 +80,5 @@ tools/._*
 tools/warp-transducer/build
 tools/warp-ctc/build
 tools/warp-transducer/pytorch_binding/dist
-
+tools/sctk
 

@@ -88,8 +88,8 @@ class TransducerTasks(torch.nn.Module):
 
             self.transducer_loss = RNNTLoss(
                 blank=blank_id,
-                reduction="sum",
-                fastemit_lambda=fastemit_lambda,
+                reduction="sum"#,
+                #fastemit_lambda=fastemit_lambda,
             )
 
         if ctc_loss:

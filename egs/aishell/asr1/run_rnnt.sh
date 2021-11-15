@@ -8,8 +8,8 @@
 
 # general configuration
 backend=pytorch
-stage=0        # start from 0 if you need to start from data preparation
-stop_stage=100
+stage=5        # start from 0 if you need to start from data preparation
+stop_stage=5
 ngpu=1         # number of gpus ("0" uses cpu, otherwise use gpu)
 debugmode=1
 dumpdir=dump   # directory to dump full features
@@ -20,29 +20,29 @@ resume=        # Resume the training from snapshot
 # feature configuration
 do_delta=false
 
-preprocess_config=
-train_config=conf/train.yaml
+preprocess_config=conf/specaug.yaml
+train_config=conf/tuning/transducer/train_transducer.yaml
 lm_config=conf/lm.yaml
-decode_config=conf/decode.yaml
+decode_config=conf/tuning/transducer/decode_default.yaml
 
 # rnnlm related
 lm_resume=         # specify a snapshot file to resume LM training
-lmtag=             # tag for managing LMs
+lmtag=none             # tag for managing LMs
 
 # ngram
-ngramtag=
+ngramtag=none
 n_gram=4
 
 # decoding parameter
-recog_model=model.acc.best # set a model to be used for decoding: 'model.acc.best' or 'model.loss.best'
+recog_model=model.loss.best # set a model to be used for decoding: 'model.acc.best' or 'model.loss.best'
 n_average=10
 
 # data
-data=/export/a05/xna/data
+data=data
 data_url=www.openslr.org/resources/33
 
 # exp tag
-tag="" # tag for managing experiments.
+tag="rnnt" # tag for managing experiments.
 
 . utils/parse_options.sh || exit 1;
 
@@ -270,9 +270,9 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
             --batchsize 0 \
             --recog-json ${feat_recog_dir}/split${nj}utt/data.JOB.json \
             --result-label ${expdir}/${decode_dir}/data.JOB.json \
-            --model ${expdir}/results/${recog_model}  \
-            --rnnlm ${lmexpdir}/rnnlm.model.best \
-            ${recog_v2_opts}
+            --model ${expdir}/results/${recog_model}  #\
+            #--rnnlm ${lmexpdir}/rnnlm.model.best \
+            #${recog_v2_opts}
 
         score_sclite.sh ${expdir}/${decode_dir} ${dict}
 

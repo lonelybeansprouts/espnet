@@ -85,6 +85,8 @@ if ! tar -xvzf $part.tgz; then
   exit 1;
 fi
 
+cd ..
+
 touch $data/$part/.complete
 
 if [ $part == "data_aishell" ]; then
