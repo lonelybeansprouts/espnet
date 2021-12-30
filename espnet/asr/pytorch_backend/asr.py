@@ -1259,6 +1259,152 @@ def recog(args):
         )
 
 
+class ExportHelper(torch.nn.Module):
+    def __init__(
+        self,
+        model
+        ):
+        super(ExportHelper, self).__init__()
+        self.model = model
+    def forward(
+        self,
+        inputs
+        ):
+        return self.model.forward_export(inputs)
+
+      
+
+def export_model(
+    model,
+    example_inputs,
+    example_outputs,
+    export_tag=""
+):  
+    random_inputs = [x.clone() if x.dtype!=torch.float32 else torch.randn(x.size()).float() for x in example_inputs]
+    export_model_helper = ExportHelper(model).eval()
+    script_model = torch.jit.trace(export_model_helper, (random_inputs,))
+    script_model_output = script_model(example_inputs)
+    for (x,y) in zip(example_outputs, script_model_output):
+        print('ave diff:', torch.mean(torch.abs(x.float()-y.float())))
+
+
+
+
+def export(args):
+    """Decode with the given args.
+
+    Args:
+        args (namespace): The program arguments.
+
+    """
+    set_deterministic_pytorch(args)
+    model, train_args = load_trained_model(args.model, training=False)
+    assert isinstance(model, ASRInterface)
+    model.recog_args = args
+
+    if args.quantize_config is not None:
+        q_config = set([getattr(torch.nn, q) for q in args.quantize_config])
+    else:
+        q_config = {torch.nn.Linear}
+
+    if args.quantize_asr_model:
+        logging.info("Use a quantized ASR model for decoding.")
+
+        # It seems quantized LSTM only supports non-packed sequence before torch 1.4.0.
+        # Reference issue: https://github.com/pytorch/pytorch/issues/27963
+        if (
+            torch.__version__ < LooseVersion("1.4.0")
+            and "lstm" in train_args.etype
+            and torch.nn.LSTM in q_config
+        ):
+            raise ValueError(
+                "Quantized LSTM in ESPnet is only supported with torch 1.4+."
+            )
+
+        # Dunno why but weight_observer from dynamic quantized module must have
+        # dtype=torch.qint8 with torch < 1.5 although dtype=torch.float16 is supported.
+        if args.quantize_dtype == "float16" and torch.__version__ < LooseVersion(
+            "1.5.0"
+        ):
+            raise ValueError(
+                "float16 dtype for dynamic quantization is not supported with torch "
+                "version < 1.5.0. Switching to qint8 dtype instead."
+            )
+
+        dtype = getattr(torch, args.quantize_dtype)
+
+        model = torch.quantization.quantize_dynamic(model, q_config, dtype=dtype)
+
+    if args.streaming_mode and "transformer" in train_args.model_module:
+        raise NotImplementedError("streaming mode for transformer is not implemented")
+    logging.info(
+        " Total parameter of the model = "
+        + str(sum(p.numel() for p in model.parameters()))
+    )
+
+
+    # read json data
+    with open(args.recog_json, "rb") as f:
+        js = json.load(f)["utts"]
+    new_js = {}
+
+    load_inputs_and_targets = LoadInputsAndTargets(
+        mode="asr",
+        load_output=False,
+        sort_in_input_length=False,
+        preprocess_conf=train_args.preprocess_conf
+        if args.preprocess_conf is None
+        else args.preprocess_conf,
+        preprocess_args={"train": False},
+    )
+
+    # load transducer beam search
+    if hasattr(model, "is_transducer"):
+        if hasattr(model, "enc"):
+            trans_encoder = model.enc.eval()
+        else:
+            trans_encoder = model.encoder.eval()
+
+        if hasattr(model, "dec"):
+            trans_decoder = model.dec.eval()
+        else:
+            trans_decoder = model.decoder.eval()
+
+        joint_network = model.transducer_tasks.joint_network.eval()
+
+
+        with torch.no_grad():
+            for idx, name in enumerate(js.keys(), 1):
+                logging.info("(%d/%d) decoding " + name, idx, len(js.keys()))
+                batch = [(name, js[name])]
+                feat = load_inputs_and_targets(batch)
+                feat = feat[0][0]
+                feat = torch.from_numpy(feat).unsqueeze(0)
+                feat_len = torch.Tensor((feat.size(1),)).long()
+                encoder_output = trans_encoder(feat, feat_len)
+                export_model(trans_encoder, [feat, feat_len], encoder_output[0:2])
+
+                trans_decoder.set_device('cpu')
+                input_label = torch.tensor([[trans_decoder.blank_id]], dtype=torch.long)
+                h_states, c_states = trans_decoder.init_state(1)
+                if (c_states != None):
+                    decoder_inputs = (input_label, h_states, c_states)
+                else:
+                    decoder_inputs = (input_label, h_states)
+                decoder_outputs = trans_decoder.forward_export(decoder_inputs)
+                export_model(trans_decoder, decoder_inputs, decoder_outputs)
+                
+
+                joint_inputs = (encoder_output[0], decoder_outputs[1])
+                joint_outputs = joint_network.export_forward(joint_inputs)
+                export_model(joint_network, joint_inputs, joint_outputs)
+
+                return 
+
+
+
+
+
 def enhance(args):
     """Dumping enhanced speech and mask.
 

@@ -160,6 +160,55 @@ class RNNDecoder(TransducerDecoderInterface, torch.nn.Module):
 
         return dec_out
 
+
+    def forward_export(self, inputs) -> torch.Tensor:
+        """Encode source label sequences.
+
+        Args:
+            labels: Label ID sequences. (B, L)
+
+        Returns:
+            dec_out: Decoder output sequences. (B, T, U, D_dec)
+
+        """
+        label = inputs[0].view(1,1)
+        sequence = self.embed(label)
+
+        if self.dtype == "lstm":
+            h_prev, c_prev = inputs[1:]
+            h_next=[] 
+            c_next=[]
+        else:
+            h_prev = inputs[1:]
+            h_next=[]
+
+
+
+        for layer in range(self.dlayers):
+            if self.dtype == "lstm":
+                sequence, (
+                    h_l,
+                    c_l,
+                ) = self.decoder[layer](
+                    sequence, hx=(h_prev[layer : layer + 1], c_prev[layer : layer + 1])
+                )
+                h_next.append(h_l)
+                c_next.append(c_l)
+            else:
+                sequence, h_l = self.decoder[layer](
+                    sequence, hx=h_prev[layer : layer + 1]
+                )
+                h_next.append(h_l)
+
+
+        if self.dtype == "lstm":
+            h_next = torch.cat(h_next, 0)
+            c_next = torch.cat(c_next, 0)
+            return (sequence, h_next, c_next)
+        else:
+            h_next = torch.cat(h_next, 0)
+            return (sequence, h_next)
+
     def score(
         self, hyp: Hypothesis, cache: Dict[str, Any]
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]], torch.Tensor]:

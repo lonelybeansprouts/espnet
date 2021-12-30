@@ -21,7 +21,7 @@ from torch.nn.utils.rnn import pack_padded_sequence
 from torch.nn.utils.rnn import pad_packed_sequence
 
 from espnet.nets.e2e_asr_common import get_vgg2l_odim
-from espnet.nets.pytorch_backend.nets_utils import make_pad_mask
+from espnet.nets.pytorch_backend.nets_utils import make_pad_mask, make_pad_mask_export
 from espnet.nets.pytorch_backend.nets_utils import to_device
 
 
@@ -242,6 +242,7 @@ class RNN(torch.nn.Module):
         aux_rnn_outputs = []
         aux_rnn_lens = []
         current_states = []
+        
 
         for layer in range(self.elayers):
             if not isinstance(rnn_len, torch.Tensor):
@@ -265,6 +266,9 @@ class RNN(torch.nn.Module):
             current_states.append(states)
 
             rnn_output, rnn_len = pad_packed_sequence(pack_rnn_output, batch_first=True)
+            
+
+
 
             if self.bidir:
                 rnn_output = (
@@ -282,8 +286,9 @@ class RNN(torch.nn.Module):
                 aux_rnn_outputs.append(aux_rnn_output)
                 aux_rnn_lens.append(rnn_len)
 
+
             if layer < self.elayers - 1:
-                rnn_input = self.dropout(rnn_output)
+                rnn_input = self.dropout(rnn_output)            
 
         proj_rnn_output = torch.tanh(
             self.l_last(rnn_output.contiguous().view(-1, rnn_output.size(2)))
@@ -375,15 +380,25 @@ class VGG2L(torch.nn.Module):
             vgg_out.size(0), vgg_out.size(1), vgg_out.size(2) * vgg_out.size(3)
         )
 
-        if torch.is_tensor(feats_len):
-            feats_len = feats_len.cpu().numpy()
-        else:
-            feats_len = np.array(feats_len, dtype=np.float32)
+        feats_len = feats_len.float()
+        feats_len = feats_len/2
+        feats_len = feats_len+1-1e-5
+        feats_len = feats_len.long()
+        feats_len = feats_len.float()
+        feats_len = feats_len/2
+        feats_len = feats_len+1-1e-5
+        vgg_out_len = feats_len.long()
 
-        vgg1_len = np.array(np.ceil(feats_len / 2), dtype=np.int64)
-        vgg_out_len = np.array(
-            np.ceil(np.array(vgg1_len, dtype=np.float32) / 2), dtype=np.int64
-        ).tolist()
+
+        #if torch.is_tensor(feats_len):
+        #    feats_len = feats_len.cpu().numpy()
+        #else:
+        #    feats_len = np.array(feats_len, dtype=np.float32)
+        #vgg1_len = np.array(np.ceil(feats_len / 2), dtype=np.int64)
+        #vgg_out_len = np.array(
+        #    np.ceil(np.array(vgg1_len, dtype=np.float32) / 2), dtype=np.int64
+        #).tolist()
+
 
         return vgg_out, vgg_out_len, None
 
@@ -546,6 +561,72 @@ class Encoder(torch.nn.Module):
 
             return _enc_out.masked_fill(enc_out_mask, 0.0), _enc_out_len, current_states
 
+
+
+    def forward_export(
+        self,
+        inputs
+    ):
+        """Forward encoder.
+
+        Args:
+            feats: Feature sequences. (B, F, D_feats)
+            feats_len: Feature sequences lengths. (B,)
+            prev_states: Previous encoder hidden states. [N x (B, T, D_enc)]
+
+        Returns:
+            enc_out: Encoder output sequences. (B, T, D_enc)
+                   with or without encoder intermediate output sequences.
+                   ((B, T, D_enc), [N x (B, T, D_enc)])
+            enc_out_len: Encoder output sequences lengths. (B,)
+            current_states: Encoder hidden states. [N x (B, T, D_enc)]
+
+        """
+        feats = inputs[0]
+        feats_len = inputs[1]
+        prev_states = None
+
+        if prev_states is None:
+            prev_states = [None] * len(self.enc)
+        assert len(prev_states) == len(self.enc)
+
+        _enc_out = feats
+        _enc_out_len = feats_len
+        current_states = []
+        for rnn_module, prev_state in zip(self.enc, prev_states):
+            _enc_out, _enc_out_len, states = rnn_module(
+                _enc_out,
+                _enc_out_len,
+                prev_states=prev_state,
+            )
+            current_states.append(states)
+
+        if isinstance(_enc_out, tuple):
+            enc_out, aux_enc_out = _enc_out[0], _enc_out[1]
+            enc_out_len, aux_enc_out_len = _enc_out_len[0], _enc_out_len[1]
+
+            enc_out_mask = to_device(enc_out, make_pad_mask_export(enc_out_len).unsqueeze(-1))
+            enc_out = enc_out.masked_fill(enc_out_mask, 0.0)
+
+            for i in range(len(aux_enc_out)):
+                aux_mask = to_device(
+                    aux_enc_out[i], make_pad_mask_export(aux_enc_out_len[i]).unsqueeze(-1)
+                )
+                aux_enc_out[i] = aux_enc_out[i].masked_fill(aux_mask, 0.0)
+
+            return (
+                (enc_out, aux_enc_out),
+                (enc_out_len, aux_enc_out_len),
+                current_states,
+            )
+        else:
+            enc_out_mask = to_device(
+                _enc_out, make_pad_mask_export(_enc_out_len).unsqueeze(-1)
+            )
+
+            return (_enc_out.masked_fill(enc_out_mask, 0.0), _enc_out_len)
+        
+    
 
 def encoder_for(
     args: Namespace,

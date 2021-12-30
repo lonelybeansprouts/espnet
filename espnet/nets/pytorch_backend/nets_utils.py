@@ -176,6 +176,21 @@ def make_pad_mask(lengths, xs=None, length_dim=-1):
     return mask
 
 
+
+
+
+def make_pad_mask_export(lengths, xs=None, length_dim=-1):
+
+    bs = lengths.size()[0]
+    maxlen = lengths.max()
+    seq_range = torch.arange(0, maxlen, dtype=torch.int64).to(lengths.device)
+    seq_range_expand = seq_range.unsqueeze(0).expand(bs, maxlen)
+    seq_length_expand = seq_range_expand.new(lengths).unsqueeze(-1).to(lengths.device)
+    mask = seq_range_expand >= seq_length_expand
+
+    return mask
+
+
 def make_non_pad_mask(lengths, xs=None, length_dim=-1):
     """Make mask tensor containing indices of non-padded part.
 
