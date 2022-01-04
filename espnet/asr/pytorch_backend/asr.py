@@ -1287,6 +1287,11 @@ def export_model(
     for (x,y) in zip(example_outputs, script_model_output):
         print('ave diff:', torch.mean(torch.abs(x.float()-y.float())))
 
+    if (len(export_tag)!=0):
+        if (not export_tag.endswith('.pt')):
+            export_tag = export_tag+'.pt'
+        script_model.save(export_tag)
+
 
 
 
@@ -1382,22 +1387,22 @@ def export(args):
                 feat = torch.from_numpy(feat).unsqueeze(0)
                 feat_len = torch.Tensor((feat.size(1),)).long()
                 encoder_output = trans_encoder(feat, feat_len)
-                export_model(trans_encoder, [feat, feat_len], encoder_output[0:2])
+                export_model(trans_encoder, [feat, feat_len], encoder_output[0:2], 'trans_encoder')
 
                 trans_decoder.set_device('cpu')
-                input_label = torch.tensor([[trans_decoder.blank_id]], dtype=torch.long)
+                input_label = torch.tensor([trans_decoder.blank_id], dtype=torch.long)
                 h_states, c_states = trans_decoder.init_state(1)
                 if (c_states != None):
                     decoder_inputs = (input_label, h_states, c_states)
                 else:
                     decoder_inputs = (input_label, h_states)
                 decoder_outputs = trans_decoder.forward_export(decoder_inputs)
-                export_model(trans_decoder, decoder_inputs, decoder_outputs)
+                export_model(trans_decoder, decoder_inputs, decoder_outputs, 'trans_decoder')
                 
 
                 joint_inputs = (encoder_output[0], decoder_outputs[1])
-                joint_outputs = joint_network.export_forward(joint_inputs)
-                export_model(joint_network, joint_inputs, joint_outputs)
+                joint_outputs = joint_network.forward_export(joint_inputs)
+                export_model(joint_network, joint_inputs, joint_outputs, 'trans_joint')
 
                 return 
 

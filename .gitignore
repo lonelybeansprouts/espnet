@@ -29,7 +29,7 @@ test_spm.model
 *.nfs*
 *.o
 *.so
-
+*.pt
 
 # recipe related
 egs*/*/*/data*
