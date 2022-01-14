@@ -11,13 +11,18 @@ decode_config=conf/tuning/transducer/decode_default.yaml
 backend=pytorch
 example_feat_json=dump/test/deltafalse/split32utt/data.1.json
 model_path=exp/train_sp_pytorch_rnnt/results/model.loss.best
+test_wav=
 
 
-rnnt_export.py \
+# rnnt_export.py \
+#     --config ${decode_config} \
+#     --backend ${backend} \
+#     --recog-json  $example_feat_json  \
+#     --model ${model_path}
+
+fbank_export.py \
     --config ${decode_config} \
     --backend ${backend} \
     --recog-json  $example_feat_json  \
     --model ${model_path}
-
-
   
